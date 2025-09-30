@@ -4,7 +4,7 @@ from flask_pymongo import PyMongo
 mongoDb=PyMongo()
 def create_app():
     app = Flask(__name__)
-    app.config["MONGO_URI"] = "mongodb://localhost:27017/mobile"
+    app.config["MONGO_URI"] = "mongodb://mongodb:27017/mobile"
     
     mongoDb.init_app(app)
     # 블루프린트 등록 예시

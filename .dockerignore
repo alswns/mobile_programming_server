@@ -1,0 +1,9 @@
+# .dockerignore 예시
+.git
+.gitignore
+Dockerfile
+*.md
+*.env
+__pycache__
+*.pyc
+tests/

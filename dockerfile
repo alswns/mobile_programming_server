@@ -13,6 +13,7 @@ COPY . .
 # Flask 환경변수 설정
 ENV FLASK_APP=run.py
 ENV FLASK_RUN_HOST=0.0.0.0
+ENV FLASK_RUN_PORT=8080
 
 # 컨테이너 시작 시 실행할 명령
 CMD ["flask", "run"]
