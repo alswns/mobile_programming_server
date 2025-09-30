@@ -1,21 +1,22 @@
-name: Deploy Docker App to Ubuntu Server
+on: # 이럴때 실행 해달라
+  # Triggers the workflow on push or pull request events but only for the main branch
+  push: # push를 할때
+    branches: #어떤것이?
+      - main #main이
+    # main의 정보에 push될때마다 실행을 해달라
 
-on:
-  push:
-    branches:
-      - main
-
+# 실행
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
+  SSH:
+    runs-on: ubuntu-latest # 우분투 최신버전으로 컴퓨터를 준비하라 ()
 
-    # ssh에 접속하여 script 실행
     steps:
-      - name: excuting remote ssh commands
-        uses: appleboy/ssh-action@master
+      - uses: actions/checkout@v3 # 레파지토리 참고하라
+      - name: ssh to ec2 # ec2에 접속하라.
+        uses: appleboy/ssh-action@master # 접속 제공 코드
         with:
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          script: |
-            cd /home/ubuntu/server
+          key: ${{ secrets.SERVER_SSH_KEY }} # 키페어 필요
+          host: ${{ secrets.SERVER_HOST }} # ip
+          username: ${{ secrets.SERVER_USER }} # 해당 유저 접속
+          script: | # 실행 할 코드
+            ls
