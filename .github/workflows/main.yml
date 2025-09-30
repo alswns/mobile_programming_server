@@ -19,4 +19,4 @@ jobs:
           host: ${{ secrets.SERVER_HOST }} # ip
           username: ${{ secrets.SERVER_USER }} # 해당 유저 접속
           script: | # 실행 할 코드
-            ls
+            mkdir iamin
