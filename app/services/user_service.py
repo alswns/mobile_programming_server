@@ -4,7 +4,7 @@ class UserService:
     @staticmethod
     def register_user(email,username, password):
         if UserRepository.get_user_by_email(email):
-            return False, "User already exists"
+            return False, "User already existss"
         UserRepository.add_user(email,username, password)
         return True, "User registered successfully"
     @staticmethod
