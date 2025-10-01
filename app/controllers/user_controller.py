@@ -40,15 +40,15 @@ def register():
     return jsonify({"message": msg}), status_code
 
 # 보호된 리소스 접근
-@app.route('/protected', methods=['GET'])
+@user_bp.route('/protected', methods=['GET'])
 @jwt_required()
 def protected():
     current_user = get_jwt_identity()
     return jsonify(logged_in_as=current_user), 200
 
 # 토큰 갱신 엔드포인트
-@app.route('/refresh', methods=['POST'])
-@jwt_refresh_token_required
+@user_bp.route('/refresh', methods=['POST'])
+@jwt_required(refresh=True)
 def refresh():
     current_user = get_jwt_identity()
     new_access_token = create_access_token(identity=current_user)
