@@ -5,6 +5,42 @@ user_bp = Blueprint('users', __name__)
 
 @user_bp.route('/login', methods=['POST'])
 def login():
+    """
+    사용자 로그인 API
+    ---
+    parameters:
+      - name: user
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            email:
+              type: string
+            password:
+              type: string
+    responses:
+      200:
+        description: 로그인 성공
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+            access_token:
+              type: string
+            refresh_token:
+              type: string
+      401:
+        description: 로그인 실패
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+    tags:
+      - Users"""
+
     data = request.json
     email = data.get('email')
     password = data.get('password')
@@ -19,17 +55,43 @@ def login():
     else:
         return jsonify({"message": msg}), status_code
 
-@user_bp.route('/profile', methods=['GET'])
-def profile():
-    username = request.args.get('username')
-    user = UserService.get_user(username)
-    if user:
-        return jsonify({"username": user['username']}), 200
-    else:
-        return jsonify({"message": "User not found"}), 404
 
 @user_bp.route('/register', methods=['POST'])
 def register():
+    """
+    사용자 생성 API
+    ---
+    parameters:
+      - name: user
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            email:
+              type: string
+            username:
+              type: string
+            password:
+                type: string
+    responses:
+      201:
+        description: 사용자 생성 성공
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+      400:
+        description: 사용자 생성 실패
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+    tags:
+      - Users
+    """
     data = request.json
     email = data.get('email')
     username = data.get('username')
@@ -39,10 +101,67 @@ def register():
     status_code = 201 if success else 400
     return jsonify({"message": msg}), status_code
 
+@user_bp.route('/profile', methods=['GET'])
+def profile():
+    """
+    사용자 프로필 조회 API
+    ---
+    parameters:
+      - email: email
+        in: query
+        required: true
+        type: string
+    responses:
+      200:
+        description: 사용자 프로필 조회 성공
+        schema:
+          type: object
+          properties:
+            email:
+              type: string
+      404:
+        description: 사용자 프로필 조회 실패
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+    tags:
+      - Users
+    """
+    email = request.args.get('email')
+    user = UserService.get_user(email)
+    if user:
+        return jsonify({"email": user['email']}), 200
+    else:
+        return jsonify({"message": "User not found"}), 404
+
+
 # 보호된 리소스 접근
 @user_bp.route('/protected', methods=['GET'])
 @jwt_required()
 def protected():
+    """
+    보호된 리소스 접근 API
+    ---
+    responses:
+      200:
+        description: 보호된 리소스 접근 성공
+        schema:
+          type: object
+          properties:
+            logged_in_as:
+              type: string
+      401:
+        description: 보호된 리소스 접근 실패
+        schema:
+          type: object
+          properties:
+            msg:
+              type: string
+    tags:
+      - Users
+    """
     current_user = get_jwt_identity()
     return jsonify(logged_in_as=current_user), 200
 

@@ -1,13 +1,15 @@
 from flask import Flask
 from flask_pymongo import PyMongo
 from flask_jwt_extended import JWTManager
+from flasgger import Swagger
+
 mongoDb=PyMongo()
 def create_app():
     app = Flask(__name__)
     app.config["MONGO_URI"] = "mongodb://mongodb:27017/mobile"
     app.config['JWT_SECRET_KEY'] = 'super-secret-key'  # 비밀키 설정
     jwt = JWTManager(app)
-
+    swagger = Swagger(app)
     mongoDb.init_app(app)
     # 블루프린트 등록 예시
     from .controllers.main_controller import main_bp
