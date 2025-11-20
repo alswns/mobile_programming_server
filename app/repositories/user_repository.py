@@ -3,9 +3,14 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 class UserRepository:
     @staticmethod
-    def add_user(email,username, password):
+    def add_user(email,username, password, skin_profile=None):
         password_hash = generate_password_hash(password)
-        user = {"username": username, "password_hash": password_hash,"email":email}
+        user = {
+            "username": username,
+            "password_hash": password_hash,
+            "email": email,
+            "skin_profile": skin_profile or {}
+        }
         mongoDb.db.users.insert_one(user)
 
     
@@ -16,3 +21,7 @@ class UserRepository:
     @staticmethod
     def check_password(hashed_password, password):
         return check_password_hash(hashed_password, password)   
+
+    @staticmethod
+    def update_profile(email, profile: dict):
+        return mongoDb.db.users.update_one({"email": email}, {"$set": {"skin_profile": profile}})
