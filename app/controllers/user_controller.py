@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from app.services.user_service import UserService
 from flask_jwt_extended import create_access_token, create_refresh_token,jwt_required,get_jwt_identity
-from app.services.recommender_service import recommend_products
+
 user_bp = Blueprint('users', __name__)
 
 @user_bp.route('/login', methods=['POST'])
@@ -185,110 +185,3 @@ def refresh():
     new_access_token = create_access_token(identity=current_user)
     return jsonify(access_token=new_access_token), 200
 
-# 추천 엔드포인트: 사용자 피부정보(또는 간단한 요청)를 받아 추천 목록 반환
-@user_bp.route('/recommend', methods=['POST'])
-@jwt_required()
-def recommend():
-    """유저 피부 기반 상품 추천 API
-      ---
-    parameters:
-      - name: recommendation_request
-        in: body
-        required: true
-        schema:
-          type: object
-          properties:
-            skin_info:
-              type: object
-              description: Skin information like {"skin_type":"dry","concerns":["acne"]}      
-            
-            top_n:
-              type: integer
-              description: Number of top recommendations to return
-            method:
-              type: string
-              description: Recommendation method, either "tfidf" or "rule"
-    responses:
-      200:
-        description: 추천 성공
-        schema:
-          type: object
-          properties:
-            recommendations:
-              type: array
-              items:
-                type: object
-      400:
-        description: 추천 실패
-        schema:
-          type: object
-          properties:
-            message:
-              type: string
-    tags:
-      - Users 
-    """
-    data = request.json or {}
-    # expected structure: {"skin_info": {"skin_type": "dry", "concerns": ["acne"]}, "top_n": 10}
-    # If skin_info not provided, use the authenticated user's saved profile from JWT
-    skin_info = data.get('skin_info', {})
-    if not skin_info:
-      current_identity = get_jwt_identity()
-      if current_identity:
-        user = UserService.get_user(current_identity)
-        if user and user.get('skin_profile'):
-          skin_info = user.get('skin_profile')
-    top_n = data.get('top_n', 10)
-    method = (data.get('method') or 'tfidf').lower()
-    recs = []
-    if method == 'tfidf':
-        try:
-            from app.services.recommender_tfidf import recommend_products_tfidf
-            recs = recommend_products_tfidf(skin_info, top_n=top_n)
-        except Exception:
-            # fallback to rule-based if TF-IDF not available
-            recs = recommend_products(skin_info, top_n=top_n)
-    else:
-        recs = recommend_products(skin_info, top_n=top_n)
-
-    return jsonify({'recommendations': recs}), 200
-
-
-@user_bp.route('/ranking', methods=['GET'])
-def ranking():
-    """
-    글로벌 상품 랭킹 조회 API
-    ---
-    parameters:
-      - name: top_n
-        in: query
-        required: false
-        type: integer
-        description: Number of top ranked products to return (default is 20)
-    responses:
-      200:
-        description: 글로벌 상품 랭킹 조회 성공
-        schema:
-          type: object
-          properties:
-            ranking:
-              type: array       
-              items:
-                type: object
-      400:
-        description: 글로벌 상품 랭킹 조회 실패
-        schema:
-          type: object
-          properties:
-            message:
-              type: string
-    tags:
-      - Users
-      """
-    try:
-        top_n = int(request.args.get('top_n', 20))
-    except Exception:
-        top_n = 20
-    from app.services.recommender_service import get_global_ranking
-    recs = get_global_ranking(top_n=top_n)
-    return jsonify({'ranking': recs}), 200
