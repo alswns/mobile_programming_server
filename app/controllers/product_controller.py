@@ -1,0 +1,160 @@
+from flask import Blueprint, request, jsonify
+from app.services.user_service import UserService
+from flask_jwt_extended import create_access_token, create_refresh_token,jwt_required,get_jwt_identity
+from app.services.product_service import ProductService
+product_bp = Blueprint('products', __name__)
+
+
+# 추천 엔드포인트: 사용자 피부정보(또는 간단한 요청)를 받아 추천 목록 반환
+# @product_bp.route('/recommend', methods=['POST'])
+# @jwt_required()
+# def recommend():
+#     """유저 피부 기반 상품 추천 API
+#       ---
+#     parameters:
+#       - name: recommendation_request
+#         in: body
+#         required: true
+#         schema:
+#           type: object
+#           properties:
+#             skin_info:
+#               type: object
+#               description: Skin information like {"skin_type":"dry","concerns":["acne"]}      
+            
+#             top_n:
+#               type: integer
+#               description: Number of top recommendations to return
+#             method:
+#               type: string
+#               description: Recommendation method, either "tfidf" or "rule"
+#     responses:
+#       200:
+#         description: 추천 성공
+#         schema:
+#           type: object
+#           properties:
+#             recommendations:
+#               type: array
+#               items:
+#                 type: object
+#       400:
+#         description: 추천 실패
+#         schema:
+#           type: object
+#           properties:
+#             message:
+#               type: string
+#     tags:
+#       - Users 
+#     """
+#     data = request.json or {}
+#     # expected structure: {"skin_info": {"skin_type": "dry", "concerns": ["acne"]}, "top_n": 10}
+#     # If skin_info not provided, use the authenticated user's saved profile from JWT
+#     skin_info = data.get('skin_info', {})
+#     if not skin_info:
+#       current_identity = get_jwt_identity()
+#       if current_identity:
+#         user = UserService.get_user(current_identity)
+#         if user and user.get('skin_profile'):
+#           skin_info = user.get('skin_profile')
+#     top_n = data.get('top_n', 10)
+#     method = (data.get('method') or 'tfidf').lower()
+#     recs = []
+#     if method == 'tfidf':
+#         try:
+#             from app.services.recommender_tfidf import recommend_products_tfidf
+#             recs = recommend_products_tfidf(skin_info, top_n=top_n)
+#         except Exception:
+#             # fallback to rule-based if TF-IDF not available
+#             recs = recommend_products(skin_info, top_n=top_n)
+#     else:
+#         recs = recommend_products(skin_info, top_n=top_n)
+
+#     return jsonify({'recommendations': recs}), 200
+
+
+
+
+
+@product_bp.route('/detail', methods=['GET'])
+def parse_product_detail():
+    """
+    상품 상세 정보 파싱 API
+    ---
+    parameters:
+      - name: productId
+        in: query
+        required: true
+        type: string
+        example: "P510337"
+      - name: preferedSku
+        in: query
+        required: true
+        type: string
+        example: "2758951"
+    responses:
+      200:
+        description: 상품 상세 정보 파싱 성공
+        schema:
+          type: object
+          properties:
+            product:
+              type: object
+      400:
+        description: 상품 상세 정보 파싱 실패
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+    tags:
+      - Products  
+    """
+    productId= request.args.get('productId')
+    preferedSku= request.args.get('preferedSku')
+
+
+    if not productId or not preferedSku:
+        return jsonify({'message': 'missing json payload'}), 400
+
+    processed = ProductService.process_sephora_product_detail(productId,preferedSku)
+    return jsonify({'product': processed}), 200
+
+
+@product_bp.route('/ranking', methods=['GET'])
+def ranking(top_n=20):
+    """
+    글로벌 상품 랭킹 조회 API
+    ---
+    parameters:
+      - name: top_n
+        in: query
+        required: false
+        type: integer
+        description: Number of top ranked products to return (default is 20)
+    responses:
+      200:
+        description: 글로벌 상품 랭킹 조회 성공
+        schema:
+          type: object
+          properties:
+            ranking:
+              type: array       
+              items:
+                type: object
+      400:
+        description: 글로벌 상품 랭킹 조회 실패
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+    tags:
+      - Products
+      """
+    top_n = request.args.get('top_n', default=20, type=int)
+
+    recs = ProductService.get_global_ranking(top_n=top_n)
+    
+    return jsonify({'ranking': recs}), 200

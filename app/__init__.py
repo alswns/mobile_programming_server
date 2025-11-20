@@ -14,8 +14,10 @@ def create_app():
     # 블루프린트 등록 예시
     from .controllers.main_controller import main_bp
     from .controllers.user_controller import user_bp
+    from .controllers.product_controller import product_bp
     app.register_blueprint(main_bp, url_prefix='/')
     app.register_blueprint(user_bp, url_prefix='/users')
+    app.register_blueprint(product_bp, url_prefix='/products')
     
     # 기타 확장 초기화 코드 등 추가 가능
     
