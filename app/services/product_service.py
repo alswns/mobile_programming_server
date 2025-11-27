@@ -219,9 +219,14 @@ class ProductService:
 
         scored.sort(key=lambda x: x[0], reverse=True)
         out = []
-        for score, p in scored[:top_n]:
+        seen_ids = set()
+        for score, p in scored:
+            pid = p.get('product_id')
+            if pid in seen_ids:
+                continue
+            seen_ids.add(pid)
             out.append({
-                'product_id': p.get('product_id'),
+                'product_id': pid,
                 'product_name': p.get('product_name'),
                 'brand_name': p.get('brand_name'),
                 'rating': p.get('rating'),
@@ -234,6 +239,8 @@ class ProductService:
                 'skuId': p.get('skuId'),
                 'score': round(score, 2)
             })
+            if len(out) >= top_n:
+                break
         return out
 
     @staticmethod
