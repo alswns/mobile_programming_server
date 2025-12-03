@@ -239,66 +239,73 @@ def get_product_by_id(product_id):
 @product_bp.route('/detail', methods=['GET'])
 def parse_product_detail():
     """
-    상품 상세 정보 조회 API (MongoDB 캐싱 + API 폴백)
+    상품 상세 정보 파싱 API (이전 응답 형식 유지)
     ---
     parameters:
       - name: productId
         in: query
         required: true
         type: string
-        description: Product ID (e.g., "P510337")
+        example: "P510337"
       - name: preferedSku
         in: query
-        required: false
+        required: true
         type: string
-        description: Preferred SKU ID (optional if cached)
-      - name: refresh
-        in: query
-        required: false
-        type: boolean
-        description: Force refresh from API (default false)
+        example: "2758951"
     responses:
       200:
-        description: 상품 상세 정보 조회 성공
+        description: 상품 상세 정보 파싱 성공
         schema:
           type: object
           properties:
             product:
               type: object
-            source:
-              type: string
-              description: Data source (cache or api)
       400:
-        description: 잘못된 요청
-      404:
-        description: 제품을 찾을 수 없음
+        description: 상품 상세 정보 파싱 실패
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
     tags:
       - Products  
     """
-    product_id = request.args.get('productId')
-    prefered_sku = request.args.get('preferedSku')
-    force_refresh = request.args.get('refresh', 'false').lower() == 'true'
+    productId = request.args.get('productId')
+    preferedSku = request.args.get('preferedSku')
 
-    if not product_id:
-        return jsonify({'message': 'productId is required'}), 400
+    if not productId:
+      return jsonify({'message': 'productId is required'}), 400
 
-    # Use cached method with API fallback
-    product = ProductService.get_product_detail_cached(
-        product_id=product_id,
-        sku_id=prefered_sku,
-        force_refresh=force_refresh
-    )
-    
-    if product and 'error' not in product:
-        return jsonify({
-            'product': product,
-            'source': product.get('source', 'cache'),
-            'last_updated': product.get('last_updated')
-        }), 200
-    elif product and 'error' in product:
-        return jsonify({'message': product['error']}), 400
-    else:
-        return jsonify({'message': 'Product not found'}), 404
+    # 1) MongoDB의 product_details 컬렉션에 저장된 상세 데이터가 있으면 그것을 반환 (이전과 동일 포맷)
+    try:
+      from app import mongoDb
+      cached = mongoDb.db.product_details.find_one({'product_id': productId}, {'_id': 0})
+      if cached:
+        return jsonify({'product': cached}), 200
+    except Exception:
+      # 캐시 조회 실패 시에는 기존 로직으로 진행
+      pass
+
+    # 2) 캐시에 없으면, 이전 로직으로 파싱 수행 (preferedSku 필수)
+    if not preferedSku:
+      return jsonify({'message': 'productId and preferedSku are required'}), 400
+
+    processed = ProductService.process_sephora_product_detail(productId, preferedSku)
+
+    # 3) 성공적으로 파싱된 경우 product_details 컬렉션에 저장
+    try:
+      from app import mongoDb
+      if processed and isinstance(processed, dict):
+        mongoDb.db.product_details.update_one(
+          {'product_id': productId},
+          {'$set': processed},
+          upsert=True
+        )
+    except Exception:
+      # 저장 실패 시에도 응답은 그대로 반환
+      pass
+
+    return jsonify({'product': processed}), 200
 
 
 @product_bp.route('/ranking', methods=['GET'])
