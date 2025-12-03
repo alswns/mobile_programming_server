@@ -136,6 +136,74 @@ def search_product():
     return jsonify({'results': results}), 200
 
 
+@product_bp.route('/<product_id>/similar', methods=['GET'])
+def get_similar_products(product_id):
+    """
+    유사 제품 추천 API
+    ---
+    parameters:
+      - name: product_id
+        in: path
+        required: true
+        type: string
+        description: Product ID to find similar products for
+      - name: top_n
+        in: query
+        required: false
+        type: integer
+        description: Number of similar products to return (default 10)
+    responses:
+      200:
+        description: 유사 제품 조회 성공
+        schema:
+          type: object
+          properties:
+            product_id:
+              type: string
+            similar_products:
+              type: array
+              items:
+                type: object
+                properties:
+                  product_id:
+                    type: string
+                  product_name:
+                    type: string
+                  brand_name:
+                    type: string
+                  rating:
+                    type: number
+                  reviews:
+                    type: integer
+                  price:
+                    type: string
+                  similarity_score:
+                    type: number
+      404:
+        description: 제품을 찾을 수 없음
+    tags:
+      - Products
+    """
+    try:
+        top_n = int(request.args.get('top_n', 10))
+    except Exception:
+        top_n = 10
+    
+    similar = ProductService.find_similar_products(product_id, top_n=top_n)
+    
+    if not similar:
+        return jsonify({
+            'message': 'Product not found or no similar products available',
+            'product_id': product_id,
+            'similar_products': []
+        }), 404
+    
+    return jsonify({
+        'product_id': product_id,
+        'similar_products': similar
+    }), 200
+
+
 @product_bp.route('/detail', methods=['GET'])
 def parse_product_detail():
     """

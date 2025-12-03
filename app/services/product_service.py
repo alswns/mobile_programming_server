@@ -2,7 +2,7 @@ import csv
 import ast
 import os
 from app.utils.apis import get_detail_from_sephora
-DATASET_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'dataset', 'product_info.csv')
+DATASET_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'dataset', 'products_unified.csv')
 
 _PRODUCTS = None
 _PRODUCTS_WITH_CATEGORIES = None
@@ -424,7 +424,7 @@ class ProductService:
 
     @staticmethod
     def load_products_with_categories():
-        """Load products from product_item.csv and join with category info from product_info.csv.
+        """Load products from unified CSV file with all data (item info + categories).
         
         Returns list of products with image_url, target_url, reviews, and category fields.
         Cached globally for performance.
@@ -433,48 +433,12 @@ class ProductService:
         if _PRODUCTS_WITH_CATEGORIES is not None:
             return _PRODUCTS_WITH_CATEGORIES
         
-        product_item_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'dataset', 'product_item.csv')
-        product_info_path = DATASET_PATH
-        assigned_categories_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'dataset', 'product_categories_assigned.csv')
-        
-        # Load product_info for category mapping
-        category_map = {}
-        try:
-            with open(product_info_path, newline='', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    pid = row.get('product_id')
-                    if pid:
-                        category_map[pid] = {
-                            'primary_category': row.get('primary_category', ''),
-                            'secondary_category': row.get('secondary_category', ''),
-                            'tertiary_category': row.get('tertiary_category', '')
-                        }
-        except Exception:
-            pass
-        
-        # Load assigned categories (from ML/keyword classification)
-        try:
-            with open(assigned_categories_path, newline='', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    pid = row.get('product_id')
-                    if pid and pid not in category_map:
-                        category_map[pid] = {
-                            'primary_category': row.get('primary_category', ''),
-                            'secondary_category': row.get('secondary_category', ''),
-                            'tertiary_category': row.get('tertiary_category', '')
-                        }
-        except Exception:
-            pass
-        
-        # Load product_item and merge categories
+        # Load unified products file
         products = []
         try:
-            with open(product_item_path, newline='', encoding='utf-8') as f:
+            with open(DATASET_PATH, newline='', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
                 for row in reader:
-                    pid = row.get('product_id')
                     # Normalize fields
                     try:
                         row['rating'] = float(row.get('rating') or 0)
@@ -485,16 +449,9 @@ class ProductService:
                     except Exception:
                         row['reviews'] = 0
                     
-                    # Merge category info
-                    if pid and pid in category_map:
-                        row.update(category_map[pid])
-                    else:
-                        row['primary_category'] = ''
-                        row['secondary_category'] = ''
-                        row['tertiary_category'] = ''
-                    
                     products.append(row)
-        except Exception:
+        except Exception as e:
+            print(f"Error loading unified products: {e}")
             return []
         
         _PRODUCTS_WITH_CATEGORIES = products
@@ -616,24 +573,12 @@ class ProductService:
     def find_product_by_name(query: str, top_n: int = 1):
         """Find products by name similarity and return with main_image.
         
-        Uses fuzzy string matching on product names from product_item.csv.
+        Uses fuzzy string matching on product names from unified products file.
         Returns list of dicts with product_id, product_name, brand_name, image_url, rating, reviews.
         """
         from difflib import SequenceMatcher
         
-        product_item_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'dataset', 'product_item.csv')
-        products = []
-        
-        if not os.path.exists(product_item_path):
-            return []
-        
-        try:
-            with open(product_item_path, newline='', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    products.append(row)
-        except Exception:
-            return []
+        products = ProductService.load_products_with_categories()
         
         if not products or not query:
             return []
@@ -690,5 +635,134 @@ class ProductService:
             
             if len(out) >= top_n:
                 break
+        
+        return out
+
+    @staticmethod
+    def find_similar_products(product_id: str, top_n: int = 10):
+        """Find similar products based on category, brand, price range, and name keywords.
+        
+        Args:
+            product_id: Product ID to find similar items for
+            top_n: Number of similar products to return
+        
+        Returns:
+            List of similar products with similarity scores
+        """
+        products = ProductService.load_products_with_categories()
+        if not products:
+            return []
+        
+        # Find the target product
+        target = None
+        for p in products:
+            if p.get('product_id') == product_id:
+                target = p
+                break
+        
+        if not target:
+            return []
+        
+        # Extract target product features
+        target_name = (target.get('product_name') or '').lower()
+        target_brand = (target.get('brand_name') or '').lower()
+        target_primary = (target.get('primary_category') or '').lower()
+        target_secondary = (target.get('secondary_category') or '').lower()
+        target_tertiary = (target.get('tertiary_category') or '').lower()
+        
+        try:
+            target_price = float(target.get('listPrice', '0').replace('$', '').split('-')[0].strip())
+        except Exception:
+            target_price = 0
+        
+        # Calculate similarity for each product (with deduplication)
+        similarities = []
+        seen_ids = set()
+        
+        for p in products:
+            pid = p.get('product_id')
+            if pid == product_id:  # Skip the target product itself
+                continue
+            
+            if pid in seen_ids:  # Skip duplicates
+                continue
+            seen_ids.add(pid)
+            
+            score = 0.0
+            
+            # Category matching (most important)
+            primary = (p.get('primary_category') or '').lower()
+            secondary = (p.get('secondary_category') or '').lower()
+            tertiary = (p.get('tertiary_category') or '').lower()
+            
+            if primary == target_primary:
+                score += 40  # Same primary category
+                if secondary == target_secondary:
+                    score += 25  # Same secondary category
+                    if tertiary == target_tertiary and tertiary:
+                        score += 15  # Same tertiary category
+            
+            # Brand matching
+            brand = (p.get('brand_name') or '').lower()
+            if brand == target_brand:
+                score += 20
+            
+            # Price similarity (within 30% range)
+            try:
+                price = float(p.get('listPrice', '0').replace('$', '').split('-')[0].strip())
+                if target_price > 0 and price > 0:
+                    price_diff = abs(price - target_price) / target_price
+                    if price_diff <= 0.3:
+                        score += 15 * (1 - price_diff / 0.3)
+            except Exception:
+                pass
+            
+            # Name/keyword similarity
+            name = (p.get('product_name') or '').lower()
+            common_keywords = ['serum', 'cream', 'oil', 'cleanser', 'mask', 'moisturizer',
+                              'toner', 'sunscreen', 'treatment', 'essence', 'gel', 'balm']
+            for keyword in common_keywords:
+                if keyword in target_name and keyword in name:
+                    score += 3
+            
+            # Rating bonus (prefer highly-rated similar products)
+            try:
+                rating = float(p.get('rating') or 0)
+                score += rating * 0.5
+            except Exception:
+                pass
+            
+            if score > 10:  # Minimum threshold
+                similarities.append((score, p))
+        
+        # Sort by similarity score
+        similarities.sort(key=lambda x: x[0], reverse=True)
+        
+        # Format output
+        out = []
+        for score, p in similarities[:top_n]:
+            try:
+                rating = float(p.get('rating') or 0)
+            except Exception:
+                rating = 0.0
+            try:
+                reviews = int(p.get('reviews') or 0)
+            except Exception:
+                reviews = 0
+            
+            out.append({
+                'product_id': p.get('product_id'),
+                'product_name': p.get('product_name'),
+                'brand_name': p.get('brand_name'),
+                'rating': rating,
+                'reviews': reviews,
+                'primary_category': p.get('primary_category'),
+                'secondary_category': p.get('secondary_category'),
+                'tertiary_category': p.get('tertiary_category'),
+                'price': p.get('listPrice'),
+                'image_url': p.get('image_url'),
+                'target_url': p.get('target_url'),
+                'similarity_score': round(score, 2)
+            })
         
         return out
