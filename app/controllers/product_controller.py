@@ -204,10 +204,42 @@ def get_similar_products(product_id):
     }), 200
 
 
+@product_bp.route('/<product_id>', methods=['GET'])
+def get_product_by_id(product_id):
+    """
+    제품 상세 정보 조회 API (MongoDB 캐시)
+    ---
+    parameters:
+      - name: product_id
+        in: path
+        required: true
+        type: string
+        description: Product ID
+    responses:
+      200:
+        description: 제품 정보 조회 성공
+        schema:
+          type: object
+          properties:
+            product:
+              type: object
+      404:
+        description: 제품을 찾을 수 없음
+    tags:
+      - Products
+    """
+    product = ProductService.get_product_by_id(product_id)
+    
+    if product:
+        return jsonify({'product': product}), 200
+    else:
+        return jsonify({'message': 'Product not found'}), 404
+
+
 @product_bp.route('/detail', methods=['GET'])
 def parse_product_detail():
     """
-    상품 상세 정보 파싱 API
+    상품 상세 정보 조회 API (MongoDB 캐싱 + API 폴백)
     ---
     parameters:
       - name: productId
@@ -217,35 +249,56 @@ def parse_product_detail():
         description: Product ID (e.g., "P510337")
       - name: preferedSku
         in: query
-        required: true
+        required: false
         type: string
-        description: Preferred SKU ID (e.g., "2758951")
+        description: Preferred SKU ID (optional if cached)
+      - name: refresh
+        in: query
+        required: false
+        type: boolean
+        description: Force refresh from API (default false)
     responses:
       200:
-        description: 상품 상세 정보 파싱 성공
+        description: 상품 상세 정보 조회 성공
         schema:
           type: object
           properties:
             product:
               type: object
-      400:
-        description: 상품 상세 정보 파싱 실패
-        schema:
-          type: object
-          properties:
-            message:
+            source:
               type: string
+              description: Data source (cache or api)
+      400:
+        description: 잘못된 요청
+      404:
+        description: 제품을 찾을 수 없음
     tags:
       - Products  
     """
-    productId = request.args.get('productId')
-    preferedSku = request.args.get('preferedSku')
+    product_id = request.args.get('productId')
+    prefered_sku = request.args.get('preferedSku')
+    force_refresh = request.args.get('refresh', 'false').lower() == 'true'
 
-    if not productId or not preferedSku:
-        return jsonify({'message': 'productId and preferedSku are required'}), 400
+    if not product_id:
+        return jsonify({'message': 'productId is required'}), 400
 
-    processed = ProductService.process_sephora_product_detail(productId, preferedSku)
-    return jsonify({'product': processed}), 200
+    # Use cached method with API fallback
+    product = ProductService.get_product_detail_cached(
+        product_id=product_id,
+        sku_id=prefered_sku,
+        force_refresh=force_refresh
+    )
+    
+    if product and 'error' not in product:
+        return jsonify({
+            'product': product,
+            'source': product.get('source', 'cache'),
+            'last_updated': product.get('last_updated')
+        }), 200
+    elif product and 'error' in product:
+        return jsonify({'message': product['error']}), 400
+    else:
+        return jsonify({'message': 'Product not found'}), 404
 
 
 @product_bp.route('/ranking', methods=['GET'])

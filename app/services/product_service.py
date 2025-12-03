@@ -766,3 +766,92 @@ class ProductService:
             })
         
         return out
+
+    @staticmethod
+    def get_product_by_id(product_id: str):
+        """Get product from MongoDB cache.
+        
+        Args:
+            product_id: Product ID to retrieve
+        
+        Returns:
+            Product dict or None
+        """
+        from app import mongoDb
+        
+        try:
+            product = mongoDb.db.products.find_one(
+                {'product_id': product_id},
+                {'_id': 0}  # Exclude MongoDB _id field
+            )
+            return product
+        except Exception as e:
+            print(f"Error fetching from MongoDB: {e}")
+            return None
+    
+    @staticmethod
+    def get_product_detail_cached(product_id: str, sku_id: str = None, force_refresh: bool = False):
+        """Get product detail with MongoDB caching and API fallback.
+        
+        Strategy:
+        1. Check MongoDB cache first
+        2. If not found or force_refresh, call Sephora API
+        3. Save API result to MongoDB for future requests
+        
+        Args:
+            product_id: Product ID
+            sku_id: SKU ID (optional, will try to find from cache)
+            force_refresh: Force API call even if cached
+        
+        Returns:
+            Product detail dict
+        """
+        from app import mongoDb
+        from datetime import datetime
+        
+        # 1. Try MongoDB cache first (unless force refresh)
+        if not force_refresh:
+            cached = mongoDb.db.products.find_one(
+                {'product_id': product_id},
+                {'_id': 0}
+            )
+            
+            if cached:
+                # Return cached data
+                return cached
+        
+        # 2. Cache miss or force refresh - call API
+        if not sku_id:
+            # Try to get SKU from cache
+            cached = mongoDb.db.products.find_one(
+                {'product_id': product_id},
+                {'skuId': 1, '_id': 0}
+            )
+            if cached and cached.get('skuId'):
+                sku_id = cached['skuId']
+            else:
+                return {'error': 'SKU ID required for API call'}
+        
+        try:
+            # Call Sephora API
+            api_data = ProductService.process_sephora_product_detail(product_id, sku_id)
+            
+            if api_data:
+                # Add metadata
+                api_data['source'] = 'api'
+                api_data['last_updated'] = datetime.utcnow().isoformat()
+                
+                # 3. Save to MongoDB cache
+                mongoDb.db.products.update_one(
+                    {'product_id': product_id},
+                    {'$set': api_data},
+                    upsert=True
+                )
+                
+                return api_data
+            else:
+                return {'error': 'Failed to fetch from API'}
+        
+        except Exception as e:
+            print(f"Error calling Sephora API: {e}")
+            return {'error': str(e)}

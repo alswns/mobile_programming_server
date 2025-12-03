@@ -208,11 +208,3 @@ marimo/_lsp/
 __marimo__/
 
 test.py
-
-# Large dataset files
-dataset/reviews_*.csv
-dataset/*_backup.csv
-dataset/*_deduped.csv
-dataset/product_item.csv
-dataset/product_info.csv
-dataset/product_categories_assigned.csv

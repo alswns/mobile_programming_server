@@ -1,21 +1,40 @@
 services:
-  web:
-    build: .
-    ports:
-      - "8080:8080"
-    depends_on:
-      - mongodb
-    environment:
-      - FLASK_ENV=development
-      - MONGO_URI=mongodb://mongodb:27017/mydatabase
-
   mongodb:
-    image: mongo:latest
+    image: mongo:6.0
+    container_name: mobile_mongodb
     restart: always
     ports:
       - "27017:27017"
     volumes:
       - mongodata:/data/db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app_network
+
+  web:
+    build: .
+    container_name: mobile_web
+    ports:
+      - "8080:8080"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    environment:
+      - FLASK_ENV=development
+      - MONGO_URI=mongodb://mongodb:27017/mobile
+    volumes:
+      - ./dataset:/app/dataset:ro
+    networks:
+      - app_network
+    restart: unless-stopped
 
 volumes:
   mongodata:
+
+networks:
+  app_network:
+    driver: bridge
