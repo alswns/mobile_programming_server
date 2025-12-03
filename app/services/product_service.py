@@ -444,3 +444,84 @@ class ProductService:
             out['skus'] = []
 
         return out
+
+    @staticmethod
+    def find_product_by_name(query: str, top_n: int = 1):
+        """Find products by name similarity and return with main_image.
+        
+        Uses fuzzy string matching on product names from product_item.csv.
+        Returns list of dicts with product_id, product_name, brand_name, image_url, rating, reviews.
+        """
+        from difflib import SequenceMatcher
+        
+        product_item_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'dataset', 'product_item.csv')
+        products = []
+        
+        if not os.path.exists(product_item_path):
+            return []
+        
+        try:
+            with open(product_item_path, newline='', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    products.append(row)
+        except Exception:
+            return []
+        
+        if not products or not query:
+            return []
+        
+        query_lower = query.lower().strip()
+        scored = []
+        
+        for p in products:
+            name = (p.get('product_name') or '').lower()
+            brand = (p.get('brand_name') or '').lower()
+            
+            # Calculate similarity score
+            name_score = SequenceMatcher(None, query_lower, name).ratio()
+            # Boost if query is substring
+            if query_lower in name:
+                name_score += 0.3
+            # Boost if brand matches
+            if query_lower in brand:
+                name_score += 0.2
+            
+            if name_score > 0.1:  # threshold
+                scored.append((name_score, p))
+        
+        scored.sort(key=lambda x: x[0], reverse=True)
+        
+        out = []
+        seen_ids = set()
+        for score, p in scored:
+            pid = p.get('product_id')
+            if pid in seen_ids:
+                continue
+            seen_ids.add(pid)
+            
+            try:
+                rating = float(p.get('rating') or 0)
+            except Exception:
+                rating = 0.0
+            try:
+                reviews = int(p.get('reviews') or 0)
+            except Exception:
+                reviews = 0
+            
+            out.append({
+                'product_id': pid,
+                'product_name': p.get('product_name'),
+                'brand_name': p.get('brand_name'),
+                'image_url': p.get('image_url'),
+                'target_url': p.get('target_url'),
+                'rating': rating,
+                'reviews': reviews,
+                'price': p.get('listPrice'),
+                'similarity_score': round(score, 3)
+            })
+            
+            if len(out) >= top_n:
+                break
+        
+        return out

@@ -77,7 +77,66 @@ product_bp = Blueprint('products', __name__)
 
 
 
-@product_bp.route('/detail', methods=['GET'])
+@product_bp.route('/search', methods=['GET'])
+def search_product():
+    """
+    제품 이름 검색 API - 가장 유사한 제품의 메인 이미지 반환
+    ---
+    parameters:
+      - name: query
+        in: query
+        required: true
+        type: string
+        description: Product name to search for
+      - name: top_n
+        in: query
+        required: false
+        type: integer
+        description: Number of results to return (default 1)
+    responses:
+      200:
+        description: 검색 성공
+        schema:
+          type: object
+          properties:
+            results:
+              type: array
+              items:
+                type: object
+                properties:
+                  product_id:
+                    type: string
+                  product_name:
+                    type: string
+                  brand_name:
+                    type: string
+                  image_url:
+                    type: string
+                  rating:
+                    type: number
+                  reviews:
+                    type: integer
+                  similarity_score:
+                    type: number
+      400:
+        description: 검색 실패
+    tags:
+      - Products
+    """
+    query = request.args.get('query')
+    if not query:
+        return jsonify({'message': 'query parameter is required'}), 400
+    
+    try:
+        top_n = int(request.args.get('top_n', 1))
+    except Exception:
+        top_n = 1
+    
+    results = ProductService.find_product_by_name(query, top_n=top_n)
+    return jsonify({'results': results}), 200
+
+
+@product_bp.route('/detail', methods=['POST'])
 def parse_product_detail():
     """
     상품 상세 정보 파싱 API
