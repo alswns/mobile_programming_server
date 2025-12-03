@@ -23,6 +23,13 @@ def migrate_products_to_mongodb():
     db = client.get_database()
     products_collection = db.products
     
+    # Check if data already exists
+    existing_count = products_collection.count_documents({})
+    if existing_count > 0:
+        print(f"✅ MongoDB already has {existing_count} products. Skipping migration.")
+        print("   (To force re-migration, manually drop the collection first)")
+        return True
+    
     # CSV file path
     csv_path = os.path.join(os.path.dirname(__file__), '..', 'dataset', 'products_unified.csv')
     
@@ -58,11 +65,7 @@ def migrate_products_to_mongodb():
         print(f"❌ Error reading CSV: {e}")
         return False
     
-    # Drop existing collection and recreate
-    print("🗑️  Dropping existing products collection...")
-    products_collection.drop()
-    
-    # Insert products
+    # Insert products (don't drop existing collection)
     if products:
         try:
             print(f"💾 Inserting {len(products)} products into MongoDB...")
