@@ -1,6 +1,6 @@
 services:
   mongodb:
-    image: mongo:6.0
+    image: mongo:8.0
     container_name: mobile_mongodb
     restart: always
     ports:
@@ -8,7 +8,11 @@ services:
     volumes:
       - mongodata:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "mongosh --eval 'db.runCommand({ ping: 1 }).ok' --quiet || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "mongo --eval 'db.runCommand({ ping: 1 }).ok' --quiet || exit 1",
+        ]
       interval: 15s
       timeout: 10s
       retries: 10
