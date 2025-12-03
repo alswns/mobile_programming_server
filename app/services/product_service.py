@@ -5,6 +5,7 @@ from app.utils.apis import get_detail_from_sephora
 DATASET_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'dataset', 'product_info.csv')
 
 _PRODUCTS = None
+_PRODUCTS_WITH_CATEGORIES = None
 
 class ProductService:
     @staticmethod
@@ -170,35 +171,9 @@ class ProductService:
         
         
         """
-
-        # Prefer product_item.csv when available (contains image_url, target_url, reviews)
-        product_item_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'dataset', 'product_item.csv')
-        products = []
-        if os.path.exists(product_item_path):
-            # load product_item.csv
-            try:
-                with open(product_item_path, newline='', encoding='utf-8') as f:
-                    reader = csv.DictReader(f)
-                    for row in reader:
-                        # normalize fields
-                        # product_item.csv has columns: product_id,product_name,brand_name,rating,reviews,image_url,target_url,listPrice,skuId
-                        try:
-                            row['rating'] = float(row.get('rating') or 0)
-                        except Exception:
-                            row['rating'] = 0.0
-                        try:
-                            # 'reviews' column stores review count
-                            row['reviews'] = int(row.get('reviews') or 0)
-                        except Exception:
-                            row['reviews'] = 0
-                        row['image_url'] = row.get('image_url')
-                        row['target_url'] = row.get('target_url')
-                        row['listPrice'] = row.get('listPrice')
-                        products.append(row)
-            except Exception:
-                products = load_products(csv_path)
-        else:
-            products = load_products(csv_path)
+        # Use load_products_with_categories to get products with category info
+        products = ProductService.load_products_with_categories()
+        
         if not products:
             return []
 
@@ -233,6 +208,8 @@ class ProductService:
                 # include reviews count when available
                 'reviews': p.get('reviews') if p.get('reviews') is not None else p.get('loves_count'),
                 'primary_category': p.get('primary_category'),
+                'secondary_category': p.get('secondary_category'),
+                'tertiary_category': p.get('tertiary_category'),
                 'price_usd': p.get('price_usd') or p.get('listPrice'),
                 'image_url': p.get('image_url'),
                 'target_url': p.get('target_url'),
@@ -444,6 +421,196 @@ class ProductService:
             out['skus'] = []
 
         return out
+
+    @staticmethod
+    def load_products_with_categories():
+        """Load products from product_item.csv and join with category info from product_info.csv.
+        
+        Returns list of products with image_url, target_url, reviews, and category fields.
+        Cached globally for performance.
+        """
+        global _PRODUCTS_WITH_CATEGORIES
+        if _PRODUCTS_WITH_CATEGORIES is not None:
+            return _PRODUCTS_WITH_CATEGORIES
+        
+        product_item_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'dataset', 'product_item.csv')
+        product_info_path = DATASET_PATH
+        assigned_categories_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'dataset', 'product_categories_assigned.csv')
+        
+        # Load product_info for category mapping
+        category_map = {}
+        try:
+            with open(product_info_path, newline='', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    pid = row.get('product_id')
+                    if pid:
+                        category_map[pid] = {
+                            'primary_category': row.get('primary_category', ''),
+                            'secondary_category': row.get('secondary_category', ''),
+                            'tertiary_category': row.get('tertiary_category', '')
+                        }
+        except Exception:
+            pass
+        
+        # Load assigned categories (from ML/keyword classification)
+        try:
+            with open(assigned_categories_path, newline='', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    pid = row.get('product_id')
+                    if pid and pid not in category_map:
+                        category_map[pid] = {
+                            'primary_category': row.get('primary_category', ''),
+                            'secondary_category': row.get('secondary_category', ''),
+                            'tertiary_category': row.get('tertiary_category', '')
+                        }
+        except Exception:
+            pass
+        
+        # Load product_item and merge categories
+        products = []
+        try:
+            with open(product_item_path, newline='', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    pid = row.get('product_id')
+                    # Normalize fields
+                    try:
+                        row['rating'] = float(row.get('rating') or 0)
+                    except Exception:
+                        row['rating'] = 0.0
+                    try:
+                        row['reviews'] = int(row.get('reviews') or 0)
+                    except Exception:
+                        row['reviews'] = 0
+                    
+                    # Merge category info
+                    if pid and pid in category_map:
+                        row.update(category_map[pid])
+                    else:
+                        row['primary_category'] = ''
+                        row['secondary_category'] = ''
+                        row['tertiary_category'] = ''
+                    
+                    products.append(row)
+        except Exception:
+            return []
+        
+        _PRODUCTS_WITH_CATEGORIES = products
+        return _PRODUCTS_WITH_CATEGORIES
+
+    @staticmethod
+    def get_ranking_by_category(category: str = None, level: str = 'primary', top_n: int = 20):
+        """Get product ranking filtered by category.
+        
+        Args:
+            category: Category name to filter (None = all products)
+            level: Category level - 'primary', 'secondary', or 'tertiary'
+            top_n: Number of products to return
+        
+        Returns:
+            List of ranked products with category info
+        """
+        products = ProductService.load_products_with_categories()
+        if not products:
+            return []
+        
+        # Filter by category if specified
+        if category:
+            category_lower = category.lower().strip()
+            level_key = f'{level}_category'
+            filtered = []
+            for p in products:
+                cat_value = (p.get(level_key) or '').lower().strip()
+                if cat_value == category_lower:
+                    filtered.append(p)
+            products = filtered
+        
+        if not products:
+            return []
+        
+        # Score and rank
+        scored = []
+        for p in products:
+            try:
+                rating = float(p.get('rating') or 0)
+            except Exception:
+                rating = 0.0
+            try:
+                reviews = int(p.get('reviews') or 0)
+            except Exception:
+                reviews = 0
+            
+            score = rating * 3.0 + min(reviews / 100.0, 20.0)
+            scored.append((score, p))
+        
+        scored.sort(key=lambda x: x[0], reverse=True)
+        
+        # Dedupe and format output
+        out = []
+        seen_ids = set()
+        for score, p in scored:
+            pid = p.get('product_id')
+            if pid in seen_ids:
+                continue
+            seen_ids.add(pid)
+            
+            out.append({
+                'product_id': pid,
+                'product_name': p.get('product_name'),
+                'brand_name': p.get('brand_name'),
+                'rating': p.get('rating'),
+                'reviews': p.get('reviews'),
+                'primary_category': p.get('primary_category'),
+                'secondary_category': p.get('secondary_category'),
+                'tertiary_category': p.get('tertiary_category'),
+                'price_usd': p.get('listPrice'),
+                'image_url': p.get('image_url'),
+                'target_url': p.get('target_url'),
+                'skuId': p.get('skuId'),
+                'score': round(score, 2)
+            })
+            
+            if len(out) >= top_n:
+                break
+        
+        return out
+
+    @staticmethod
+    def get_categories_list(level: str = 'all'):
+        """Get list of available categories with product counts.
+        
+        Args:
+            level: 'primary', 'secondary', 'tertiary', or 'all'
+        
+        Returns:
+            Dict with category lists and counts
+        """
+        products = ProductService.load_products_with_categories()
+        if not products:
+            return {}
+        
+        result = {}
+        levels = ['primary', 'secondary', 'tertiary'] if level == 'all' else [level]
+        
+        for lvl in levels:
+            category_key = f'{lvl}_category'
+            counts = {}
+            
+            for p in products:
+                cat = (p.get(category_key) or '').strip()
+                if cat:
+                    counts[cat] = counts.get(cat, 0) + 1
+            
+            # Sort by count descending
+            sorted_cats = sorted(counts.items(), key=lambda x: x[1], reverse=True)
+            result[f'{lvl}_categories'] = [
+                {'name': name, 'count': count}
+                for name, count in sorted_cats
+            ]
+        
+        return result
 
     @staticmethod
     def find_product_by_name(query: str, top_n: int = 1):

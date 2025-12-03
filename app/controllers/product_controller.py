@@ -136,7 +136,7 @@ def search_product():
     return jsonify({'results': results}), 200
 
 
-@product_bp.route('/detail', methods=['POST'])
+@product_bp.route('/detail', methods=['GET'])
 def parse_product_detail():
     """
     상품 상세 정보 파싱 API
@@ -146,12 +146,12 @@ def parse_product_detail():
         in: query
         required: true
         type: string
-        example: "P510337"
+        description: Product ID (e.g., "P510337")
       - name: preferedSku
         in: query
         required: true
         type: string
-        example: "2758951"
+        description: Preferred SKU ID (e.g., "2758951")
     responses:
       200:
         description: 상품 상세 정보 파싱 성공
@@ -170,21 +170,20 @@ def parse_product_detail():
     tags:
       - Products  
     """
-    productId= request.args.get('productId')
-    preferedSku= request.args.get('preferedSku')
-
+    productId = request.args.get('productId')
+    preferedSku = request.args.get('preferedSku')
 
     if not productId or not preferedSku:
-        return jsonify({'message': 'missing json payload'}), 400
+        return jsonify({'message': 'productId and preferedSku are required'}), 400
 
-    processed = ProductService.process_sephora_product_detail(productId,preferedSku)
+    processed = ProductService.process_sephora_product_detail(productId, preferedSku)
     return jsonify({'product': processed}), 200
 
 
 @product_bp.route('/ranking', methods=['GET'])
 def ranking(top_n=20):
     """
-    글로벌 상품 랭킹 조회 API
+    글로벌 상품 랭킹 조회 API (카테고리 필터 지원)
     ---
     parameters:
       - name: top_n
@@ -192,6 +191,16 @@ def ranking(top_n=20):
         required: false
         type: integer
         description: Number of top ranked products to return (default is 20)
+      - name: category
+        in: query
+        required: false
+        type: string
+        description: Category name to filter (e.g., 'Skincare', 'Fragrance')
+      - name: level
+        in: query
+        required: false
+        type: string
+        description: Category level - 'primary', 'secondary', or 'tertiary' (default is 'primary')
     responses:
       200:
         description: 글로벌 상품 랭킹 조회 성공
@@ -213,7 +222,59 @@ def ranking(top_n=20):
       - Products
       """
     top_n = request.args.get('top_n', default=20, type=int)
-
-    recs = ProductService.get_global_ranking(top_n=top_n)
+    category = request.args.get('category', default=None, type=str)
+    level = request.args.get('level', default='primary', type=str)
+    
+    # Validate level
+    if level not in ['primary', 'secondary', 'tertiary']:
+        level = 'primary'
+    
+    if category:
+        # Use category-based ranking
+        recs = ProductService.get_ranking_by_category(category=category, level=level, top_n=top_n)
+    else:
+        # Use original global ranking
+        recs = ProductService.get_global_ranking(top_n=top_n)
     
     return jsonify({'ranking': recs}), 200
+
+
+@product_bp.route('/categories', methods=['GET'])
+def get_categories():
+    """
+    카테고리 목록 조회 API
+    ---
+    parameters:
+      - name: level
+        in: query
+        required: false
+        type: string
+        description: Category level - 'primary', 'secondary', 'tertiary', or 'all' (default is 'primary')
+    responses:
+      200:
+        description: 카테고리 목록 조회 성공
+        schema:
+          type: object
+          properties:
+            primary_categories:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  count:
+                    type: integer
+      400:
+        description: 카테고리 목록 조회 실패
+    tags:
+      - Products
+    """
+    level = request.args.get('level', default='primary', type=str)
+    
+    # Validate level
+    if level not in ['primary', 'secondary', 'tertiary', 'all']:
+        level = 'primary'
+    
+    categories = ProductService.get_categories_list(level=level)
+    return jsonify(categories), 200

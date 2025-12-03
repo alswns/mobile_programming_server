@@ -36,7 +36,7 @@ def create_app():
                 "name": "API Support"
             }
         },
-        "host": "localhost:5000",
+        "host": "localhost:8080",
         "basePath": "/",
         "schemes": ["http", "https"],
         "securityDefinitions": {
