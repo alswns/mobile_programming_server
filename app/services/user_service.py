@@ -22,11 +22,22 @@ class UserService:
     def get_user(email):
         return UserRepository.get_user_by_email(email)
     @staticmethod
-    def authenticate_user(email,password):
-        user = UserRepository.get_user_by_email(email)
-        if user and UserRepository.check_password(user['password_hash'], password):
-            return True, "Authentication successful"
-        return False, "Invalid credentials"
+    def authenticate_user(email, password):
+        # 빈칸 체크
+        if not email or not password:
+            return False, "EMPTY_FIELD", "이메일과 비밀번호를 입력해주세요"
+        
+        try:
+            user = UserRepository.get_user_by_email(email)
+            if user and UserRepository.check_password(user['password_hash'], password):
+                # 성공한 경우
+                return True, "SUCCESS", "로그인에 성공했습니다"
+            else:
+                # 인증 실패 (이메일 없음 또는 비밀번호 틀림)
+                return False, "INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다"
+        except Exception as e:
+            # 실패한 경우 (서버 오류)
+            return False, "SERVER_ERROR", f"서버 오류가 발생했습니다: {str(e)}"
     @staticmethod
     def set_user_profile(email, profile: dict):
         user = UserRepository.get_user_by_email(email)

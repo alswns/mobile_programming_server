@@ -32,13 +32,38 @@ def login():
               type: string
             refresh_token:
               type: string
-      401:
-        description: 로그인 실패
+            error_code:
+              type: "null"
+      400:
+        description: 빈칸이 있는 경우
         schema:
           type: object
           properties:
             message:
               type: string
+            error_code:
+              type: string
+              example: EMPTY_FIELD
+      401:
+        description: 인증 실패 (이메일 또는 비밀번호가 올바르지 않음)
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+            error_code:
+              type: string
+              example: INVALID_CREDENTIALS
+      500:
+        description: 서버 오류가 발생한 경우
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+            error_code:
+              type: string
+              example: SERVER_ERROR
     tags:
       - Users"""
 
@@ -46,15 +71,28 @@ def login():
     email = data.get('email')
     password = data.get('password')
 
-    success, msg = UserService.authenticate_user(email, password)
-    status_code = 200 if success else 401
-    if status_code == 200:
-      # use email as JWT identity so endpoints can retrieve user by email
-      access_token = create_access_token(identity=email)
-      refresh_token = create_refresh_token(identity=email)
-      return jsonify({"message": msg, "access_token": access_token, "refresh_token": refresh_token}), status_code
+    success, error_code, msg = UserService.authenticate_user(email, password)
+    
+    # 오류 코드에 따른 상태 코드 매핑
+    if success:
+        status_code = 200  # 성공한 경우
+        # use email as JWT identity so endpoints can retrieve user by email
+        access_token = create_access_token(identity=email)
+        refresh_token = create_refresh_token(identity=email)
+        return jsonify({
+            "message": msg,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "error_code": None
+        }), status_code
+    elif error_code == "EMPTY_FIELD":
+        status_code = 400  # 빈칸이 있는 경우
+    elif error_code == "INVALID_CREDENTIALS":
+        status_code = 401  # 인증 실패
     else:
-      return jsonify({"message": msg}), status_code
+        status_code = 500  # 실패한 경우 (기타 서버 오류)
+    
+    return jsonify({"message": msg, "error_code": error_code}), status_code
 
 
 @user_bp.route('/register', methods=['POST'])
