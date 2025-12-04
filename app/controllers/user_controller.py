@@ -74,7 +74,7 @@ def register():
             username:
               type: string
             password:
-                type: string
+              type: string
     responses:
       201:
         description: 사용자 생성 성공
@@ -83,13 +83,38 @@ def register():
           properties:
             message:
               type: string
+            error_code:
+              type: "null"
       400:
-        description: 사용자 생성 실패
+        description: 빈칸이 있는 경우
         schema:
           type: object
           properties:
             message:
               type: string
+            error_code:
+              type: string
+              example: EMPTY_FIELD
+      409:
+        description: 유저가 이미 있는 경우
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+            error_code:
+              type: string
+              example: USER_EXISTS
+      500:
+        description: 서버 오류가 발생한 경우
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+            error_code:
+              type: string
+              example: SERVER_ERROR
     tags:
       - Users
     """
@@ -98,9 +123,19 @@ def register():
     username = data.get('username')
     password = data.get('password')
 
-    success, msg = UserService.register_user(email, username, password)
-    status_code = 201 if success else 400
-    return jsonify({"message": msg}), status_code
+    success, error_code, msg = UserService.register_user(email, username, password)
+    
+    # 오류 코드에 따른 상태 코드 매핑
+    if success:
+        status_code = 201  # 성공한 경우
+    elif error_code == "EMPTY_FIELD":
+        status_code = 400  # 빈칸이 있는 경우
+    elif error_code == "USER_EXISTS":
+        status_code = 409  # 유저가 이미 있는 경우
+    else:
+        status_code = 500  # 실패한 경우 (기타 서버 오류)
+    
+    return jsonify({"message": msg, "error_code": error_code if not success else None}), status_code
 
 @user_bp.route('/profile', methods=['GET'])
 def profile():

@@ -2,11 +2,22 @@ from app.repositories.user_repository import UserRepository
 
 class UserService:
     @staticmethod
-    def register_user(email,username, password):
+    def register_user(email, username, password):
+        # 빈칸 체크
+        if not email or not username or not password:
+            return False, "EMPTY_FIELD", "모든 필드를 입력해주세요"
+        
+        # 유저가 이미 있는 경우
         if UserRepository.get_user_by_email(email):
-            return False, "User already exists"
-        UserRepository.add_user(email,username, password)
-        return True, "User registered successfully"
+            return False, "USER_EXISTS", "이미 존재하는 사용자입니다"
+        
+        try:
+            # 성공한 경우
+            UserRepository.add_user(email, username, password)
+            return True, "SUCCESS", "회원가입이 완료되었습니다"
+        except Exception as e:
+            # 실패한 경우
+            return False, "SERVER_ERROR", f"서버 오류가 발생했습니다: {str(e)}"
     @staticmethod
     def get_user(email):
         return UserRepository.get_user_by_email(email)
