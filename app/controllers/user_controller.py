@@ -223,15 +223,13 @@ def register():
     }), status_code
 
 @user_bp.route('/user', methods=['GET'])
+@jwt_required()
 def get_user_info():
     """
     사용자 정보 조회 API
     ---
-    parameters:
-      - name: email
-        in: query
-        required: true
-        type: string
+    security:
+      - Bearer: []
     responses:
       200:
         description: 사용자 정보 조회 성공
@@ -254,19 +252,13 @@ def get_user_info():
                   type: object
             error_code:
               type: "null"
-      400:
-        description: 빈칸이 있는 경우
+      401:
+        description: 토큰이 유효하지 않거나 만료된 경우
         schema:
           type: object
           properties:
-            success:
-              type: boolean
-              example: false
-            message:
+            msg:
               type: string
-            error_code:
-              type: string
-              example: EMPTY_FIELD
       404:
         description: 유저를 찾을 수 없는 경우
         schema:
@@ -296,7 +288,8 @@ def get_user_info():
     tags:
       - Users
     """
-    email = request.args.get('email')
+    # JWT 토큰에서 이메일 가져오기
+    email = get_jwt_identity()
     user_info, error_code, msg = UserService.get_user(email)
     
     if user_info:
@@ -307,8 +300,6 @@ def get_user_info():
             "data": user_info,
             "error_code": None
         }), status_code
-    elif error_code == "EMPTY_FIELD":
-        status_code = 400
     elif error_code == "USER_NOT_FOUND":
         status_code = 404
     else:
