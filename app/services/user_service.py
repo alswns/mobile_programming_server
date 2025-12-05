@@ -99,4 +99,30 @@ class UserService:
             return True, "SUCCESS", "프로필이 업데이트되었습니다"
         except Exception as e:
             return False, "SERVER_ERROR", f"서버 오류가 발생했습니다: {str(e)}"
+    
+    @staticmethod
+    def update_skin_type(email, skin_type: str):
+        """스킨 타입만 업데이트 (기존 skin_profile 유지)"""
+        if not email:
+            return False, "EMPTY_FIELD", "이메일을 입력해주세요"
+        
+        if not skin_type:
+            return False, "EMPTY_FIELD", "스킨 타입을 입력해주세요"
+        
+        try:
+            user = UserRepository.get_user_by_email(email)
+            if not user:
+                return False, "USER_NOT_FOUND", "유저를 찾을 수 없습니다"
+            
+            # 기존 skin_profile 가져오기
+            current_profile = user.get("skin_profile", {})
+            
+            # 스킨 타입만 업데이트
+            current_profile["skin_type"] = skin_type
+            
+            # 업데이트 실행
+            UserRepository.update_profile(email, current_profile)
+            return True, "SUCCESS", "스킨 타입이 수정되었습니다"
+        except Exception as e:
+            return False, "SERVER_ERROR", f"서버 오류가 발생했습니다: {str(e)}"
         

@@ -204,37 +204,6 @@ def get_similar_products(product_id):
     }), 200
 
 
-@product_bp.route('/<product_id>', methods=['GET'])
-def get_product_by_id(product_id):
-    """
-    제품 상세 정보 조회 API (MongoDB 캐시)
-    ---
-    parameters:
-      - name: product_id
-        in: path
-        required: true
-        type: string
-        description: Product ID
-    responses:
-      200:
-        description: 제품 정보 조회 성공
-        schema:
-          type: object
-          properties:
-            product:
-              type: object
-      404:
-        description: 제품을 찾을 수 없음
-    tags:
-      - Products
-    """
-    product = ProductService.get_product_by_id(product_id)
-    
-    if product:
-        return jsonify({'product': product}), 200
-    else:
-        return jsonify({'message': 'Product not found'}), 404
-
 
 @product_bp.route('/detail', methods=['GET'])
 def parse_product_detail():

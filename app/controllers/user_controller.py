@@ -141,6 +141,10 @@ def register():
               example: true
             message:
               type: string
+            access_token:
+              type: string
+            refresh_token:
+              type: string
             error_code:
               type: "null"
       400:
@@ -195,9 +199,14 @@ def register():
     # 오류 코드에 따른 상태 코드 매핑
     if success:
         status_code = 201  # 성공한 경우
+        # use email as JWT identity so endpoints can retrieve user by email
+        access_token = create_access_token(identity=email)
+        refresh_token = create_refresh_token(identity=email)
         return jsonify({
             "success": True,
             "message": msg,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
             "error_code": None
         }), status_code
     elif error_code == "EMPTY_FIELD":
@@ -529,6 +538,104 @@ def update_profile():
     profile = data.get('skin_profile') or {}
     
     success, error_code, msg = UserService.set_user_profile(email, profile)
+    
+    if success:
+        status_code = 200
+        return jsonify({
+            "success": True,
+            "message": msg,
+            "error_code": None
+        }), status_code
+    elif error_code == "EMPTY_FIELD":
+        status_code = 400
+    elif error_code == "USER_NOT_FOUND":
+        status_code = 404
+    else:
+        status_code = 500
+    
+    return jsonify({
+        "success": False,
+        "message": msg,
+        "error_code": error_code
+    }), status_code
+
+
+@user_bp.route('/skin_info', methods=['PUT'])
+def update_skin_info():
+    """
+    사용자 스킨 타입 수정 API
+    ---
+    parameters:
+      - name: user
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            email:
+              type: string
+            skin_type:
+              type: string
+    responses:
+      200:
+        description: 스킨 타입 수정 성공
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: true
+            message:
+              type: string
+            error_code:
+              type: "null"
+      400:
+        description: 빈칸이 있는 경우
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: false
+            message:
+              type: string
+            error_code:
+              type: string
+              example: EMPTY_FIELD
+      404:
+        description: 유저를 찾을 수 없는 경우
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: false
+            message:
+              type: string
+            error_code:
+              type: string
+              example: USER_NOT_FOUND
+      500:
+        description: 서버 오류가 발생한 경우
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: false
+            message:
+              type: string
+            error_code:
+              type: string
+              example: SERVER_ERROR
+    tags:
+      - Users
+    """
+    data = request.json or {}
+    email = data.get('email')
+    skin_type = data.get('skin_type')
+    
+    success, error_code, msg = UserService.update_skin_type(email, skin_type)
     
     if success:
         status_code = 200
