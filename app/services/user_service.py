@@ -20,7 +20,53 @@ class UserService:
             return False, "SERVER_ERROR", f"서버 오류가 발생했습니다: {str(e)}"
     @staticmethod
     def get_user(email):
-        return UserRepository.get_user_by_email(email)
+        """유저 정보 조회"""
+        if not email:
+            return None, "EMPTY_FIELD", "이메일을 입력해주세요"
+        
+        try:
+            user = UserRepository.get_user_by_email(email)
+            if user:
+                # 비밀번호 해시는 제외하고 반환
+                user_info = {
+                    "email": user.get("email"),
+                    "username": user.get("username"),
+                    "skin_profile": user.get("skin_profile", {})
+                }
+                return user_info, "SUCCESS", "유저 정보 조회 성공"
+            else:
+                return None, "USER_NOT_FOUND", "유저를 찾을 수 없습니다"
+        except Exception as e:
+            return None, "SERVER_ERROR", f"서버 오류가 발생했습니다: {str(e)}"
+    
+    @staticmethod
+    def update_user_info(email, username=None, skin_profile=None):
+        """유저 정보 수정"""
+        if not email:
+            return False, "EMPTY_FIELD", "이메일을 입력해주세요"
+        
+        try:
+            user = UserRepository.get_user_by_email(email)
+            if not user:
+                return False, "USER_NOT_FOUND", "유저를 찾을 수 없습니다"
+            
+            update_data = {}
+            if username is not None:
+                if not username:
+                    return False, "EMPTY_FIELD", "사용자 이름을 입력해주세요"
+                update_data["username"] = username
+            
+            if skin_profile is not None:
+                update_data["skin_profile"] = skin_profile
+            
+            if not update_data:
+                return False, "NO_UPDATE_DATA", "수정할 정보가 없습니다"
+            
+            UserRepository.update_user(email, update_data)
+            return True, "SUCCESS", "유저 정보가 수정되었습니다"
+        except Exception as e:
+            return False, "SERVER_ERROR", f"서버 오류가 발생했습니다: {str(e)}"
+    
     @staticmethod
     def authenticate_user(email, password):
         # 빈칸 체크
@@ -40,9 +86,17 @@ class UserService:
             return False, "SERVER_ERROR", f"서버 오류가 발생했습니다: {str(e)}"
     @staticmethod
     def set_user_profile(email, profile: dict):
-        user = UserRepository.get_user_by_email(email)
-        if not user:
-            return False, "User not found"
-        UserRepository.update_profile(email, profile)
-        return True, "Profile updated"
+        """스킨 프로필만 업데이트 (기존 메서드 유지)"""
+        if not email:
+            return False, "EMPTY_FIELD", "이메일을 입력해주세요"
+        
+        try:
+            user = UserRepository.get_user_by_email(email)
+            if not user:
+                return False, "USER_NOT_FOUND", "유저를 찾을 수 없습니다"
+            
+            UserRepository.update_profile(email, profile)
+            return True, "SUCCESS", "프로필이 업데이트되었습니다"
+        except Exception as e:
+            return False, "SERVER_ERROR", f"서버 오류가 발생했습니다: {str(e)}"
         

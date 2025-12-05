@@ -25,3 +25,8 @@ class UserRepository:
     @staticmethod
     def update_profile(email, profile: dict):
         return mongoDb.db.users.update_one({"email": email}, {"$set": {"skin_profile": profile}})
+    
+    @staticmethod
+    def update_user(email, update_data: dict):
+        """유저 정보 업데이트 (일반적인 필드들)"""
+        return mongoDb.db.users.update_one({"email": email}, {"$set": update_data})
