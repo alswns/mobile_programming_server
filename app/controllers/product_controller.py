@@ -216,11 +216,7 @@ def parse_product_detail():
         required: true
         type: string
         example: "P510337"
-      - name: preferedSku
-        in: query
-        required: true
-        type: string
-        example: "2758951"
+      
     responses:
       200:
         description: 상품 상세 정보 파싱 성공
@@ -240,7 +236,8 @@ def parse_product_detail():
       - Products  
     """
     productId = request.args.get('productId')
-    preferedSku = request.args.get('preferedSku')
+    # preferedSku = request.args.get('preferedSku')
+    preferedSku = "2758951"
 
     if not productId:
       return jsonify({'message': 'productId is required'}), 400
