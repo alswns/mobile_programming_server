@@ -677,11 +677,65 @@ def protected():
     current_user = get_jwt_identity()
     return jsonify(logged_in_as=current_user), 200
 
-# 토큰 갱신 엔드포인트
 @user_bp.route('/refresh', methods=['POST'])
 @jwt_required(refresh=True)
 def refresh():
-    current_user = get_jwt_identity()
-    new_access_token = create_access_token(identity=current_user)
-    return jsonify(access_token=new_access_token), 200
+    """
+    토큰 리프레시 API
+    ---
+    security:
+      - Bearer: []
+    parameters:
+      - name: Authorization
+        in: header
+        required: true
+        type: string
+        description: Bearer {refresh_token} 형식으로 리프레시 토큰 전송
+    responses:
+      200:
+        description: 토큰 리프레시 성공
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: true
+            message:
+              type: string
+              example: "토큰이 갱신되었습니다"
+            access_token:
+              type: string
+            error_code:
+              type: "null"
+      401:
+        description: 리프레시 토큰이 유효하지 않거나 만료된 경우
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: false
+            message:
+              type: string
+            error_code:
+              type: string
+              example: INVALID_TOKEN
+    tags:
+      - Users
+    """
+    try:
+        current_user = get_jwt_identity()
+        new_access_token = create_access_token(identity=current_user)
+        return jsonify({
+            "success": True,
+            "message": "토큰이 갱신되었습니다",
+            "access_token": new_access_token,
+            "error_code": None
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": "토큰 갱신에 실패했습니다",
+            "error_code": "INVALID_TOKEN"
+        }), 401
 
